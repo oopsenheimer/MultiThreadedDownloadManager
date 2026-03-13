@@ -12,8 +12,9 @@ auto num_threads = std::thread::hardware_concurrency();
 
 int main() {
     Downloader downloadManager(TEST_URL);
-    auto file_size = downloadManager.get_download_file_size();
-    Downloader::prepare_write_stream("out.bin", file_size);
+    auto file_size = downloadManager.get_file_size();
+    auto file_name = downloadManager.get_file_name();
+    Downloader::prepare_write_stream(file_name, file_size);
     std::cout << "Size of " << TEST_URL << " = " << file_size << std::endl;
 
     std::vector<std::thread> workers;
@@ -27,14 +28,11 @@ int main() {
             end_byte = file_size - 1;
         else
             end_byte = start_byte + diff - 1;
-        workers.emplace_back(&Downloader::download_chunk, &downloadManager, i, start_byte, end_byte);
+        workers.emplace_back(&Downloader::download_chunk, &downloadManager, i, start_byte, end_byte, downloadManager.get_file_name());
         start_byte += diff;
     }
 
     for (auto& worker : workers) {
         worker.join();
     }
-
-
-    // downloadManager.download_chunk(1, 0, 500);
 }
