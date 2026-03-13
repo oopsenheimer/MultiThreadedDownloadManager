@@ -1,0 +1,11 @@
+# Ignore build folders and binaries
+build/
+*.exe
+*.o
+*.out
+
+.cache/
+
+# Ignore downloaded test files
+out.bin
+*.pdf
