@@ -7,5 +7,5 @@ build/
 .cache/
 
 # Ignore downloaded test files
-out.bin
 *.pdf
+*.bin
