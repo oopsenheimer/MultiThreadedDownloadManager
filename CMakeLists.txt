@@ -14,7 +14,7 @@ find_package(Threads REQUIRED)
 include_directories(include)
 
 # Define the executable
-add_executable(downloader src/main.cpp src/Downloader.cpp)
+add_executable(downloader src/main.cpp src/Downloader.cpp src/Socket.cpp)
 
 # Link libcurl and threads
 target_link_libraries(downloader CURL::libcurl Threads::Threads)
