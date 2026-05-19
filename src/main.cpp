@@ -1,9 +1,6 @@
 #include <sys/types.h>
-#include "HTTPClient.hpp"
-#include <iostream>
-#include <ostream>
+#include "DownloaderV2.hpp"
 #include <string>
-#include <thread>
 
 constexpr auto TEST_URL = "https://littleosbook.github.io/book.pdf";
 constexpr auto EXAMPLE_URL = "http://link.testfile.org";
@@ -11,7 +8,7 @@ constexpr auto EXAMPLE_URL = "http://link.testfile.org";
 #define DOWNLOAD_HOST "david.choffnes.com"
 #define DOWNLOAD_PATH "/classes/cs5700f22/10MB.log"
 
-auto num_threads = std::thread::hardware_concurrency();
+#define DOWNLOAD_URL "http://david.choffnes.com/classes/cs5700f22/10MB.log"
 
 // void curl_downloader() {
 //     Downloader downloadManager(TEST_URL);
@@ -145,12 +142,8 @@ auto num_threads = std::thread::hardware_concurrency();
 
 
 int main() {
-    auto info = HTTPClient::get_metadata(DOWNLOAD_HOST, DOWNLOAD_PATH);
 
-    if (info.content_length == 0) {
-      std::cout << "FAILED TO GET CONTENT LENGTH\n";
-        return -1;
-    }
+    DownloaderV2 mydownloader(DOWNLOAD_URL);
+    mydownloader.download();
 
-    std::cout << "FILE SIZE: " << info.content_length << std::endl;
 }

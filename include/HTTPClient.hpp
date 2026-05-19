@@ -1,23 +1,31 @@
 #ifndef HTTP_CLIENT_HPP
 #define HTTP_CLIENT_HPP
 
-#include "Socket.hpp"
+#include <sys/types.h>
+#include <cstddef>
+#include <string>
 
 #define SERVICE_HTTP "80"
 
-struct HTTPMetadata {
-    size_t content_length = 0;
-    bool accepts_ranges = false;
-    int status_code = 0;
-};
-
 class HTTPClient {
+    std::string _host;
+    std::string _path;
+    size_t _content_length = 0;
+    bool _accepts_ranges = false;
+    bool _is_parsed = false;
+
    public:
-    static HTTPMetadata get_metadata(const std::string& host, const std::string& path);
+    HTTPClient(const std::string& raw_url);
+    ssize_t fetch_chunks(size_t start, size_t end, char* buffer, size_t buffer_size) const;
+
+    decltype(auto) get_content_length() const { return _content_length; }
+    decltype(auto) supports_ranges() const { return _accepts_ranges; }
+    
 
    private:
-    static void prepare_range_request(Socket& sock, const std::string& host,
-                                      const std::string& path, size_t start, size_t end);
+    bool parse_url(std::string raw_url);
+    bool fetch_metadata();
+    std::string get_range_request(const std::string& start_byte, const std::string& end_byte) const;
 };
 
 #endif
