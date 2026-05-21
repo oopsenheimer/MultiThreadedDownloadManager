@@ -1,5 +1,6 @@
 #include "HTTPClient.hpp"
 
+#include <functional>
 #include <stdexcept>
 #include <string>
 
@@ -14,7 +15,9 @@ HTTPClient::HTTPClient(const std::string& raw_url) {
     }
 }
 
-ssize_t HTTPClient::fetch_chunks(size_t start, size_t end, char* buffer, size_t buffer_size) const {
+ssize_t HTTPClient::fetch_range_data(
+    size_t start, size_t end, char* buffer, size_t buffer_size,
+    const std::function<void(const char*, size_t)>& write_callback) const {
     Socket sock;
     if (!sock.connect_to_host(_host, SERVICE_HTTP)) {
         return -1;
@@ -29,7 +32,24 @@ ssize_t HTTPClient::fetch_chunks(size_t start, size_t end, char* buffer, size_t 
         return -1;
     }
 
-    return sock.receive_data(buffer, buffer_size);
+    auto total_bytes = end - start + 1;
+    decltype(total_bytes) total_received_bytes = 0;
+
+    while (total_received_bytes < total_bytes) {
+        auto read_size = std::min(buffer_size, total_bytes - total_received_bytes);
+        auto bytes_fetched = sock.receive_data(buffer, read_size);
+
+        if (bytes_fetched < 0) {
+            return -1;
+        }
+
+        if (bytes_fetched == 0) {
+            break;
+        }
+        write_callback(buffer, buffer_size);
+        total_received_bytes += bytes_fetched;
+    }
+    return total_received_bytes;
 }
 
 bool HTTPClient::parse_url(std::string raw_url) {

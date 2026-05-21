@@ -55,32 +55,15 @@ void DownloaderV2::download_worker(unsigned int thread_id ,size_t start, size_t 
         return;
     }
     file.seekp(start);
-    char buffer[8192];
+    char scratch_buffer[8192];
 
-    auto total_bytes = end - start + 1;
-    decltype(total_bytes) bytes_read = 0;
-    decltype(total_bytes) bytes_written = 0;
-    ssize_t bytes_fetched = 0;
-
-    while (bytes_written < total_bytes) {
-        auto current_start = start + bytes_written;
-        auto remaining_bytes = total_bytes - bytes_written;
-        auto current_request_size = std::min(sizeof buffer, remaining_bytes);
-        auto current_end = current_start + current_request_size - 1;
-
-        bytes_fetched =
-            _http_client.fetch_chunks(current_start, current_end, buffer, sizeof buffer);
-
-        if (bytes_fetched < 0) {
-            std::cerr << "[-] CONNECTION/NETWORK ERROR IN THREAD: " << thread_id << '\n';
-            return ;
-        }
-
-        if (bytes_fetched == 0) {
-            break;
-        }
-
-        file.write(buffer, bytes_fetched);
-        bytes_written += bytes_fetched;
+    try {
+        _http_client.fetch_range_data(start, end, scratch_buffer, sizeof(scratch_buffer), 
+            [&file](const char* chunk_bytes, size_t chunk_size) {
+                file.write(chunk_bytes, chunk_size);
+            });
+            
+    } catch (const std::exception& e) {
+        std::cerr << "[-] Thread " << thread_id << " crashed: " << e.what() << "\n";
     }
 }
