@@ -46,7 +46,7 @@ ssize_t HTTPClient::fetch_range_data(
         if (bytes_fetched == 0) {
             break;
         }
-        write_callback(buffer, buffer_size);
+        write_callback(buffer, bytes_fetched);
         total_received_bytes += bytes_fetched;
     }
     return total_received_bytes;
