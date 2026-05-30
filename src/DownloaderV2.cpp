@@ -1,4 +1,5 @@
 #include "DownloaderV2.hpp"
+#include "MemoryMappedFile.hpp"
 #include <unistd.h>
 #include <cstddef>
 #include <fstream>
@@ -16,7 +17,7 @@ void DownloaderV2::download() {
     }
 
     std::cout << "[+] STARTING DOWNLOAD\n    FILE SIZE: " << file_size << '\n';
-    prepare_file_stream(file_size);
+    auto file = prepare_memory_map(file_size);
 
     std::vector<std::thread> workers;
     auto chunk_size = file_size / num_thread;
@@ -24,7 +25,8 @@ void DownloaderV2::download() {
 
     for (decltype(num_thread) i = 0; i < num_thread; ++i) {
         auto end_byte = (i == num_thread - 1) ? (file_size - 1) : (start_byte + chunk_size - 1);
-        workers.emplace_back(&DownloaderV2::download_worker, this, i, start_byte, end_byte);
+        workers.emplace_back(&DownloaderV2::download_mmap_worker, this, i, std::ref(file),
+                             start_byte, end_byte);
         start_byte += chunk_size;
     }
 
@@ -32,7 +34,28 @@ void DownloaderV2::download() {
         worker.join();
     }
 
-    std::cout << "[+] DOWNLOAD COMPLETE\n    FILE NAME: " << _file_name << '\n'; 
+    std::cout << "[+] DOWNLOAD COMPLETE\n    FILE NAME: " << _file_name << '\n';
+}
+
+MemoryMappedFile DownloaderV2::prepare_memory_map(const size_t& file_size) {
+    return MemoryMappedFile{_file_name, file_size};
+}
+
+void DownloaderV2::download_mmap_worker(unsigned int thread_id, MemoryMappedFile& mmap, size_t start, size_t end) {
+
+    char scratch_buffer[8192];
+    size_t current_offset = start;
+    try {
+        _http_client.fetch_range_data(
+            start, end, scratch_buffer, sizeof(scratch_buffer),
+            [&mmap, &current_offset](const char* chunk_bytes, size_t chunk_size) {
+                mmap.write(current_offset, chunk_bytes, chunk_size);
+                current_offset+= chunk_size;
+            });
+
+    } catch (const std::exception& e) {
+        std::cerr << "[-] Thread " << thread_id << " crashed: " << e.what() << "\n";
+    }
 }
 
 bool DownloaderV2::prepare_file_stream(const size_t& file_size) {
@@ -55,7 +78,7 @@ void DownloaderV2::download_worker(unsigned int thread_id ,size_t start, size_t 
         return;
     }
     file.seekp(start);
-    char scratch_buffer[8192];
+    char scratch_buffer[8192/2];
 
     try {
         _http_client.fetch_range_data(start, end, scratch_buffer, sizeof(scratch_buffer), 

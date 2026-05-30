@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <utility>
 #include "HTTPClient.hpp"
+#include "MemoryMappedFile.hpp"
 
 class DownloaderV2 {
    private:
@@ -18,7 +19,9 @@ class DownloaderV2 {
 
    private:
     bool prepare_file_stream(const size_t& file_size);
+    MemoryMappedFile prepare_memory_map(const size_t& file_size);
     void download_worker(unsigned int thread_id, size_t start, size_t end);
+    void download_mmap_worker(unsigned int thread_id, MemoryMappedFile& mmap, size_t start, size_t end);
 };
 
 #endif
