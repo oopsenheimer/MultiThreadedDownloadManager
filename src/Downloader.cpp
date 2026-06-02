@@ -71,7 +71,7 @@ std::size_t Downloader::header_call_back(char* buffer, std::size_t size, std::si
         }
 
     }
-    std::cout << header_line << std::endl;
+    // std::cout << header_line << std::endl;
     return total_size;
 }
 

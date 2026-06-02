@@ -1,9 +1,17 @@
 #ifndef DOWNLOADER_V2
 #define DOWNLOADER_V2
+#include <sys/types.h>
 #include <cstddef>
 #include <utility>
 #include "HTTPClient.hpp"
 #include "MemoryMappedFile.hpp"
+#include <sys/types.h>
+#include <unistd.h>
+#include <cstddef>
+#include <fstream>
+#include <iostream>
+#include <thread>
+#include <vector>
 
 class DownloaderV2 {
    private:
@@ -15,7 +23,7 @@ class DownloaderV2 {
         : _http_client(target_url),
           _file_name(std::move(file_name)),
           _target_url(std::move(target_url)){};
-    void download();
+    ssize_t download();
 
    private:
     bool prepare_file_stream(const size_t& file_size);

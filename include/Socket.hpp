@@ -9,6 +9,7 @@ class Socket {
    private:
     int _sock_fd;
     bool _is_connected;
+    std::string _header_overflow_buffer;
 
    public:
     Socket();

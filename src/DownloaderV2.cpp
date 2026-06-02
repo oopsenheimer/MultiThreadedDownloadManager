@@ -1,13 +1,6 @@
 #include "DownloaderV2.hpp"
-#include "MemoryMappedFile.hpp"
-#include <unistd.h>
-#include <cstddef>
-#include <fstream>
-#include <iostream>
-#include <thread>
-#include <vector>
 
-void DownloaderV2::download() {
+ssize_t DownloaderV2::download() {
     const auto file_size = _http_client.get_content_length();
     auto num_thread = std::thread::hardware_concurrency();
 
@@ -35,6 +28,7 @@ void DownloaderV2::download() {
     }
 
     std::cout << "[+] DOWNLOAD COMPLETE\n    FILE NAME: " << _file_name << '\n';
+    return file_size;
 }
 
 MemoryMappedFile DownloaderV2::prepare_memory_map(const size_t& file_size) {
@@ -43,7 +37,7 @@ MemoryMappedFile DownloaderV2::prepare_memory_map(const size_t& file_size) {
 
 void DownloaderV2::download_mmap_worker(unsigned int thread_id, MemoryMappedFile& mmap, size_t start, size_t end) {
 
-    char scratch_buffer[8192];
+    char scratch_buffer[128 * 1024];
     size_t current_offset = start;
     try {
         _http_client.fetch_range_data(

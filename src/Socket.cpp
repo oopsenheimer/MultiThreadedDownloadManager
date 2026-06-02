@@ -55,10 +55,22 @@ bool Socket::send_data(const std::string& data) {
 }
 std::string Socket::receive_header() {
     std::string header;
-    char ch;
-    while (recv(_sock_fd, &ch, 1, 0) > 0) {
-        header += ch;
-        if (header.size() >= 4 && header.substr(header.size() - 4) == "\r\n\r\n") {
+    char chunk[1024];
+    while (true) {
+        auto bytes_read = recv(_sock_fd, chunk, sizeof(chunk), 0);
+        if (bytes_read <= 0) {
+            break;
+        }
+        header.append(chunk, bytes_read);
+
+        auto header_end = header.find("\r\n\r\n");
+        if (header_end != std::string::npos) {
+            auto header_end_idx = header_end + 4;
+
+            if (header_end_idx < header.size()) {
+                _header_overflow_buffer.assign(header.begin() + header_end_idx, header.end());
+            }
+            header.erase(header_end_idx);
             break;
         }
     }
@@ -66,5 +78,13 @@ std::string Socket::receive_header() {
 }
 
 ssize_t Socket::receive_data(char* buffer, size_t buffer_size) {
+    if (!_header_overflow_buffer.empty()) {
+        auto bytes_to_copy = std::min(buffer_size, _header_overflow_buffer.size());
+        std::memcpy(buffer, _header_overflow_buffer.data(), bytes_to_copy);
+        _header_overflow_buffer.erase(_header_overflow_buffer.begin(),
+                                      _header_overflow_buffer.begin() + bytes_to_copy);
+        return bytes_to_copy;
+    }
+
     return recv(_sock_fd, buffer, buffer_size, 0);
 }
