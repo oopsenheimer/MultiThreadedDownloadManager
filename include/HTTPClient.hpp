@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <functional>
 #include <string>
+#include "Socket.hpp"
 
 #define SERVICE_HTTP "80"
 
@@ -21,7 +22,7 @@ class HTTPClient {
                              const std::function<void(const char*, size_t)>& write_callback) const;
     decltype(auto) get_content_length() const { return _content_length; }
     decltype(auto) supports_ranges() const { return _accepts_ranges; }
-    
+    [[nodiscard]] Socket setup_range_socket(size_t start, size_t end) const;
 
    private:
     bool parse_url(std::string raw_url);

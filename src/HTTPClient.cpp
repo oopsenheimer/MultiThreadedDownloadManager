@@ -1,6 +1,9 @@
 #include "HTTPClient.hpp"
 
+#include <cstddef>
+#include <cstdio>
 #include <functional>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 
@@ -13,6 +16,29 @@ HTTPClient::HTTPClient(const std::string& raw_url) {
     if (!fetch_metadata()) {
         throw std::runtime_error("Metadata fetch failed");
     }
+}
+
+Socket HTTPClient::setup_range_socket(size_t start, size_t end) const {
+    Socket sock;
+
+    if (!sock.connect_to_host(_host, SERVICE_HTTP)) {
+        throw std::runtime_error("[-] FAILED TO CONNECT TO HOST");
+    }
+
+    if (!sock.send_data(get_range_request(std::to_string(start), std::to_string(end)))) {
+        throw std::runtime_error("Failed to send GET request");
+    }
+
+    auto headers = sock.receive_header();
+    if (headers.empty()) {
+        throw std::runtime_error("Failed to receive HTTP header");
+    }
+
+    if (!sock.set_to_non_blocking()) {
+        throw std::runtime_error("Failed to set socket to non-blocking");
+    }
+
+    return sock;
 }
 
 ssize_t HTTPClient::fetch_range_data(

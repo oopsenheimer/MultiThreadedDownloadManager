@@ -15,11 +15,12 @@ class Socket {
     Socket();
     ~Socket();
 
+    decltype(_sock_fd) get_sock_fd() const;
     bool connect_to_host(const std::string& host, const std::string& service);
     bool send_data(const std::string& data);
     std::string receive_header();
     ssize_t receive_data(char* buffer, size_t buffer_size);
-
+    [[nodiscard]] bool set_to_non_blocking() const;
 };
 
 #endif

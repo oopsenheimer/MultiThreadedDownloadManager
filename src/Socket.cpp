@@ -1,8 +1,10 @@
 #include "Socket.hpp"
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <netdb.h>
+#include <cerrno>
 #include <cstddef>
 #include <cstring>
 
@@ -14,6 +16,10 @@ Socket::~Socket() {
         close(_sock_fd);
         _is_connected = false;
     }
+}
+
+decltype(Socket::_sock_fd) Socket::get_sock_fd() const{
+    return _sock_fd;
 }
 
 bool Socket::connect_to_host(const std::string& host, const std::string& service) {
@@ -86,5 +92,24 @@ ssize_t Socket::receive_data(char* buffer, size_t buffer_size) {
         return bytes_to_copy;
     }
 
-    return recv(_sock_fd, buffer, buffer_size, 0);
+    auto bytes_read = recv(_sock_fd, buffer, buffer_size, 0);
+    if (bytes_read < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return -2;
+        }
+        return -1;
+    }
+    return bytes_read;
+}
+
+bool Socket::set_to_non_blocking() const {
+    auto flags = fcntl(_sock_fd, F_GETFL, 0);
+    if (flags == -1) {
+        return false;
+    }
+
+    if (fcntl(_sock_fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+        return false;
+    }
+    return true;
 }

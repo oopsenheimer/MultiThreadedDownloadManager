@@ -1,6 +1,7 @@
 #ifndef DOWNLOADER_V2
 #define DOWNLOADER_V2
 #include <sys/types.h>
+#include <atomic>
 #include <cstddef>
 #include <utility>
 #include "HTTPClient.hpp"
@@ -18,6 +19,13 @@ class DownloaderV2 {
     HTTPClient _http_client;
     std::string _file_name;
     std::string _target_url;
+
+    struct ChunkContext {
+        Socket _sock;
+        size_t _current_offset;
+        size_t _end_byte;
+    };
+
    public:
     DownloaderV2(std::string target_url, std::string file_name = "download.bin")
         : _http_client(target_url),
@@ -29,7 +37,10 @@ class DownloaderV2 {
     bool prepare_file_stream(const size_t& file_size);
     MemoryMappedFile prepare_memory_map(const size_t& file_size);
     void download_worker(unsigned int thread_id, size_t start, size_t end);
-    void download_mmap_worker(unsigned int thread_id, MemoryMappedFile& mmap, size_t start, size_t end);
+    void download_mmap_worker(MemoryMappedFile& mmap,
+                              ChunkContext* chunk_context, int epoll_fd,
+                              std::atomic<int>& active_chunks);
+    
 };
 
 #endif
