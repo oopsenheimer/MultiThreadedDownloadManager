@@ -15,6 +15,11 @@ class Socket {
     Socket();
     ~Socket();
 
+    Socket(const Socket&) = delete;
+    Socket& operator=(const Socket&) = delete;
+    Socket(Socket&& other) noexcept;
+    Socket& operator=(Socket&& other) noexcept;
+
     decltype(_sock_fd) get_sock_fd() const;
     bool connect_to_host(const std::string& host, const std::string& service);
     bool send_data(const std::string& data);

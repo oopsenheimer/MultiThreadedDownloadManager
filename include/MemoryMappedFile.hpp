@@ -6,7 +6,7 @@
 #include <string>
 
 class MemoryMappedFile {
-    int _fd;
+    int _fd = -1;
     size_t _file_size = 0;
     char* _mapped_data = reinterpret_cast<char*>(MAP_FAILED);
 

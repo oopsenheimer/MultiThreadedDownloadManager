@@ -11,6 +11,28 @@
 Socket::Socket()
     : _sock_fd(-1), _is_connected(false) {}
 
+Socket::Socket(Socket&& other) noexcept
+    : _sock_fd(other._sock_fd),
+      _is_connected(other._is_connected),
+      _header_overflow_buffer(std::move(other._header_overflow_buffer)) {
+    other._sock_fd = -1;
+    other._is_connected = false;
+}
+
+Socket& Socket::operator=(Socket&& other) noexcept {
+    if (this != &other) {
+        if (_sock_fd != -1) {
+            close(_sock_fd);
+        }
+        _sock_fd = other._sock_fd;
+        _is_connected = other._is_connected;
+        _header_overflow_buffer = std::move(other._header_overflow_buffer);
+        other._sock_fd = -1;
+        other._is_connected = false;
+    }
+    return *this;
+}
+
 Socket::~Socket() {
     if (_sock_fd != -1) {
         close(_sock_fd);

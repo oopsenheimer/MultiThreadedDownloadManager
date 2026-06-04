@@ -28,8 +28,6 @@ ssize_t DownloaderV2::download() {
     if (epoll_fd == -1) {
         throw std::runtime_error("[-] EPOLL FAILED");
     }
-    std::cout << "EPOLL DONE\n";
-    std::atomic<int> active_chunks{0};
     std::vector<std::unique_ptr<ChunkContext>> contexts;
     auto chunk_size = file_size / num_chunks;
 
@@ -43,7 +41,6 @@ ssize_t DownloaderV2::download() {
 
         try {
             ctx->_sock = _http_client.setup_range_socket(start_byte, end_byte);
-            active_chunks++;
             epoll_event ev;
             ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
             ev.data.ptr = ctx.get();
@@ -53,28 +50,40 @@ ssize_t DownloaderV2::download() {
             }
             contexts.push_back(std::move(ctx));
         } catch (const std::exception& e) {
+            std::cerr << "[-] Chunk setup failed: " << e.what() << '\n';
         }
 
         start_byte += chunk_size;
-        std::cout << "SOCKET MADE\n";
     }
 
     const int MAX_EVENTS = 16;
     std::array<epoll_event, MAX_EVENTS> incomming_events;
 
-    while (active_chunks > 0) {
-        std::cout << "EPOLL WAIT START\n";
-        auto ready_cnt = epoll_wait(epoll_fd, incomming_events.data(), MAX_EVENTS, -1);
-        std::cout << "EPOLL WAIT END\n";
+    auto pending_chunks = [&]() {
+        int n = 0;
+        for (const auto& ctx : contexts) {
+            if (!ctx->_finished.load(std::memory_order_acquire)) {
+                ++n;
+            }
+        }
+        return n;
+    };
+
+    while (pending_chunks() > 0) {
+        constexpr int epoll_timeout_ms = 100;
+        auto ready_cnt =
+            epoll_wait(epoll_fd, incomming_events.data(), MAX_EVENTS, epoll_timeout_ms);
         if (ready_cnt < 0) {
             if (errno == EINTR) continue;
             break;
         }
+        if (ready_cnt == 0) {
+            continue;
+        }
 
-        for (int i = 0; i < ready_cnt; ++i) {
-            auto* ctx = static_cast<ChunkContext*>(incomming_events[i].data.ptr);
-            pool.enqueue(&DownloaderV2::download_mmap_worker, this, std::ref(file), ctx, epoll_fd,
-                         std::ref(active_chunks));
+        for (int ev = 0; ev < ready_cnt; ++ev) {
+            auto* ctx = static_cast<ChunkContext*>(incomming_events[ev].data.ptr);
+            pool.enqueue(&DownloaderV2::download_mmap_worker, this, std::ref(file), ctx, epoll_fd);
         }
     }
 
@@ -88,46 +97,48 @@ MemoryMappedFile DownloaderV2::prepare_memory_map(const size_t& file_size) {
     return MemoryMappedFile{_file_name, file_size};
 }
 
-void DownloaderV2::download_mmap_worker(MemoryMappedFile& mmap, ChunkContext* ctx, int epoll_fd,
-                                        std::atomic<int>& active_chunks) {
+void DownloaderV2::download_mmap_worker(MemoryMappedFile& mmap, ChunkContext* ctx, int epoll_fd) {
+    if (ctx->_finished.load(std::memory_order_acquire)) {
+        return;
+    }
+
     std::array<char, 64 * 1024> scratch_buffer;
 
+    auto finish_chunk = [&]() {
+        bool expected = false;
+        if (!ctx->_finished.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+            return;
+        }
+        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, ctx->_sock.get_sock_fd(), nullptr);
+    };
+
     try {
-        while (true) {
-            // BUG 4 FIXED: Removed active_chunks-- from this boundary guard safety check
-            if (ctx->_current_offset > ctx->_end_byte) {
-                return;
-            }
-
-            std::cout << "DOWNLOAD_MMAP_WORKER\n";
-
+        while (ctx->_current_offset <= ctx->_end_byte) {
             auto bytes_to_read =
                 std::min(sizeof(scratch_buffer), ctx->_end_byte - ctx->_current_offset + 1);
-            
-            // BUG 1 FIXED: Use .data() instead of .begin()
+
             auto bytes_fetched = ctx->_sock.receive_data(scratch_buffer.data(), bytes_to_read);
-            
+
             if (bytes_fetched == -2) {
                 struct epoll_event ev;
                 ev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
                 ev.data.ptr = ctx;
                 epoll_ctl(epoll_fd, EPOLL_CTL_MOD, ctx->_sock.get_sock_fd(), &ev);
-                break;
+                return;
             }
-            
-            // BUG 3 FIXED: Catch both 0 (EOF) and -1 (Network Errors) safely
+
             if (bytes_fetched <= 0) {
-                active_chunks--;
                 break;
             }
 
-            // BUG 1 FIXED: Use .data() instead of .begin()
             mmap.write(ctx->_current_offset, scratch_buffer.data(), bytes_fetched);
             ctx->_current_offset += bytes_fetched;
         }
+
+        finish_chunk();
     } catch (const std::exception& e) {
         std::cerr << "[-] Worker exception: " << e.what() << "\n";
-        active_chunks--; // Prevent deadlock if code crashes unexpectedly
+        finish_chunk();
     }
 }
 

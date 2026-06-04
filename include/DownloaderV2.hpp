@@ -24,6 +24,7 @@ class DownloaderV2 {
         Socket _sock;
         size_t _current_offset;
         size_t _end_byte;
+        std::atomic<bool> _finished{false};
     };
 
    public:
@@ -37,9 +38,7 @@ class DownloaderV2 {
     bool prepare_file_stream(const size_t& file_size);
     MemoryMappedFile prepare_memory_map(const size_t& file_size);
     void download_worker(unsigned int thread_id, size_t start, size_t end);
-    void download_mmap_worker(MemoryMappedFile& mmap,
-                              ChunkContext* chunk_context, int epoll_fd,
-                              std::atomic<int>& active_chunks);
+    void download_mmap_worker(MemoryMappedFile& mmap, ChunkContext* chunk_context, int epoll_fd);
     
 };
 

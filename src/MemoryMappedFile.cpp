@@ -35,6 +35,10 @@ MemoryMappedFile::MemoryMappedFile(const std::string& file_name, const size_t& f
 }
 
 MemoryMappedFile::~MemoryMappedFile() {
-    munmap(_mapped_data, _file_size);
-    close(_fd);
+    if (_mapped_data != MAP_FAILED) {
+        munmap(_mapped_data, _file_size);
+    }
+    if (_fd >= 0) {
+        close(_fd);
+    }
 }
