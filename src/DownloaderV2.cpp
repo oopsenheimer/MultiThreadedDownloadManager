@@ -1,9 +1,10 @@
 #include "DownloaderV2.hpp"
+#include <future>
+#include "ThreadPool.hpp"
 
 ssize_t DownloaderV2::download() {
     const auto file_size = _http_client.get_content_length();
-    auto num_thread = std::thread::hardware_concurrency();
-
+    auto num_thread = 4;
     if (!_http_client.supports_ranges()) {
         std::cout << "[!] SERVER DOES NOT SUPPORTS RANGES\n";
         num_thread = 1;
@@ -12,19 +13,20 @@ ssize_t DownloaderV2::download() {
     std::cout << "[+] STARTING DOWNLOAD\n    FILE SIZE: " << file_size << '\n';
     auto file = prepare_memory_map(file_size);
 
-    std::vector<std::thread> workers;
+    ThreadPool pool(num_thread);
+    std::vector<std::future<void>> futures;
     auto chunk_size = file_size / num_thread;
     size_t start_byte = 0;
 
     for (decltype(num_thread) i = 0; i < num_thread; ++i) {
         auto end_byte = (i == num_thread - 1) ? (file_size - 1) : (start_byte + chunk_size - 1);
-        workers.emplace_back(&DownloaderV2::download_mmap_worker, this, i, std::ref(file),
-                             start_byte, end_byte);
+        futures.emplace_back(
+            pool.enqueue(&DownloaderV2::download_mmap_worker, this , i, std::ref(file), start_byte, end_byte));
         start_byte += chunk_size;
     }
 
-    for (auto& worker : workers) {
-        worker.join();
+    for (auto& fut : futures) {
+        fut.get();
     }
 
     std::cout << "[+] DOWNLOAD COMPLETE\n    FILE NAME: " << _file_name << '\n';
@@ -35,7 +37,7 @@ MemoryMappedFile DownloaderV2::prepare_memory_map(const size_t& file_size) {
     return MemoryMappedFile{_file_name, file_size};
 }
 
-void DownloaderV2::download_mmap_worker(unsigned int thread_id, MemoryMappedFile& mmap, size_t start, size_t end) {
+void DownloaderV2::download_mmap_worker(unsigned int chunk_number, MemoryMappedFile& mmap, size_t start, size_t end) {
 
     char scratch_buffer[128 * 1024];
     size_t current_offset = start;
@@ -48,7 +50,7 @@ void DownloaderV2::download_mmap_worker(unsigned int thread_id, MemoryMappedFile
             });
 
     } catch (const std::exception& e) {
-        std::cerr << "[-] Thread " << thread_id << " crashed: " << e.what() << "\n";
+        std::cerr << "[-] Chunk number " << chunk_number << " crashed: " << e.what() << "\n";
     }
 }
 
